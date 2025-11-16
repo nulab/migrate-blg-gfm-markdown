@@ -81,8 +81,6 @@ export class BacklogClient {
           hasMoreIssues = false;
         } else {
           offset += count;
-          // Sleep for 1 second before next API call to avoid overwhelming the API
-          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
@@ -95,10 +93,42 @@ export class BacklogClient {
   }
 
   /**
+   * Retry mechanism for API calls with exponential backoff
+   */
+  private async retryApiCall<T>(
+    apiCall: () => Promise<T>,
+    operation: string,
+    maxRetries: number = 3
+  ): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await apiCall();
+      } catch (error: any) {
+        lastError = error;
+        
+        // Check if it's a rate limit error
+        if (error.message && error.message.includes('Too Many Requests')) {
+          const waitTime = 15000; // Always wait 15 seconds for rate limit errors
+          logger.warn(`${operation} rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries + 1}`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        // For other errors, don't retry
+        throw error;
+      }
+    }
+    
+    throw lastError;
+  }
+
+  /**
    * Get detailed issue information
    */
   async getIssue(issueId: number): Promise<BacklogIssue> {
-    try {
+    return this.retryApiCall(async () => {
       logger.debug(`Fetching issue details: ${issueId}`);
       const issue = await this.client.getIssue(issueId);
       
@@ -108,26 +138,20 @@ export class BacklogClient {
         summary: issue.summary,
         description: issue.description || ''
       };
-    } catch (error) {
-      logger.error(`Failed to get issue ${issueId}:`, error);
-      throw error;
-    }
+    }, `getIssue(${issueId})`);
   }
 
   /**
    * Update an issue's description
    */
   async updateIssue(issueId: number, description: string): Promise<void> {
-    try {
+    return this.retryApiCall(async () => {
       logger.debug(`Updating issue ${issueId}`);
       await this.client.patchIssue(issueId, {
         description: description
       });
       logger.info(`Successfully updated issue ${issueId}`);
-    } catch (error) {
-      logger.error(`Failed to update issue ${issueId}:`, error);
-      throw error;
-    }
+    }, `updateIssue(${issueId})`);
   }
 
   /**
@@ -154,7 +178,7 @@ export class BacklogClient {
    * Get detailed wiki information
    */
   async getWiki(wikiId: number): Promise<BacklogWiki> {
-    try {
+    return this.retryApiCall(async () => {
       logger.debug(`Fetching wiki details: ${wikiId}`);
       const wiki = await this.client.getWiki(wikiId);
       
@@ -163,25 +187,19 @@ export class BacklogClient {
         name: wiki.name,
         content: wiki.content || ''
       };
-    } catch (error) {
-      logger.error(`Failed to get wiki ${wikiId}:`, error);
-      throw error;
-    }
+    }, `getWiki(${wikiId})`);
   }
 
   /**
    * Update a wiki's content
    */
   async updateWiki(wikiId: number, content: string): Promise<void> {
-    try {
+    return this.retryApiCall(async () => {
       logger.debug(`Updating wiki ${wikiId}`);
       await this.client.patchWiki(wikiId, {
         content
       });
       logger.info(`Successfully updated wiki ${wikiId}`);
-    } catch (error) {
-      logger.error(`Failed to update wiki ${wikiId}:`, error);
-      throw error;
-    }
+    }, `updateWiki(${wikiId})`);
   }
 }
