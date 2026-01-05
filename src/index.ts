@@ -100,14 +100,14 @@ async function listIssuesForUpdate(client: BacklogClient, projectId: number): Pr
 
     for (let i = 0; i < issues.length; i++) {
       const issue = issues[i];
-      
+
       try {
         // Get detailed issue information
         const detailedIssue = await client.getIssue(issue.id);
-        
+
         // Process markdown headers (dry-run)
         const result = processMarkdownHeaders(detailedIssue.description, 'issue', issue.id);
-        
+
         if (result.changed) {
           issuesNeedingUpdate.push({
             issue: detailedIssue,
@@ -115,8 +115,11 @@ async function listIssuesForUpdate(client: BacklogClient, projectId: number): Pr
           });
           stats.updated++;
         }
-        
+
         progressBar.update(i + 1);
+
+        // Sleep for 1 second to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         logger.error(`Error analyzing issue ${issue.issueKey}:`, error);
         stats.errors++;
@@ -236,14 +239,14 @@ async function listWikisForUpdate(client: BacklogClient, projectId: number): Pro
 
     for (let i = 0; i < wikis.length; i++) {
       const wiki = wikis[i];
-      
+
       try {
         // Get detailed wiki information
         const detailedWiki = await client.getWiki(wiki.id);
-        
+
         // Process markdown headers (dry-run)
         const result = processMarkdownHeaders(detailedWiki.content, 'wiki', wiki.id);
-        
+
         if (result.changed) {
           wikisNeedingUpdate.push({
             wiki: detailedWiki,
@@ -251,8 +254,11 @@ async function listWikisForUpdate(client: BacklogClient, projectId: number): Pro
           });
           stats.updated++;
         }
-        
+
         progressBar.update(i + 1);
+
+        // Sleep for 1 second to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         logger.error(`Error analyzing wiki ${wiki.name}:`, error);
         stats.errors++;
